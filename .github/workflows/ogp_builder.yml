@@ -2,13 +2,10 @@ name: OGP Builder
 
 on:
   push:
-    branches-ignore:
+    branches:
       - development
       - staging
-      - master
-      - production
-      - gh-pages
-
+      - feature/issue-1268-ogp-fix
 jobs:
   build:
     runs-on: windows-latest
@@ -25,30 +22,20 @@ jobs:
           key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
           restore-keys: |
             ${{ runner.os }}-yarn-
-
+      - name: clone resources branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: git clone -b resources https://${GITHUB_ACTOR}:${GITHUB_TOKEN}@github.com/tokyo-metropolitan-gov/covid19.git ogp
+      - run: del ogp/*.png
       - run: yarn install --frozen-lockfile
       - run: yarn run test
       - run: yarn run generate:deploy
       - run: pip install selenium
-      - run: (python -m http.server --directory ./dist 8000 &)  ; python ./ui-test/ogp_screenshot.py
-      - name: Upload screenshot
-        uses: actions/upload-artifact@v1
-        with:
-          name: ogp
-          path: ogp
-      - run: Get-ChildItem "ogp" | Select Name, DirectoryName, LastWriteTime,FulLName | Sort LastWriteTime -Descending | Select -First 2 | Select -ExpandProperty FullName | Copy-Item -Destination static
 
       - run: git config --global user.email "yasu@users.noreply.github.com"
       - run: git config --global user.name "OGP Builder"
-
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch-suffix: timestamp
-          commit-message: "bot: Generated OGP images"
-          title: "[bot] Generated OGP images"
-      - name: Check outputs
-        run: |
-          echo "Pull Request Number - ${{ env.PULL_REQUEST_NUMBER }}"
-          echo "Pull Request Number - ${{ steps.cpr.outputs.pr_number }}"
+      - run: (python -m http.server --directory ./dist 8000 &)  ; python ./ui-test/ogp_screenshot.py
+      - name: push ogp
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: cd ogp && git remote set-url origin https://${GITHUB_ACTOR}:${GITHUB_TOKEN}@github.com/tokyo-metropolitan-gov/covid19.git && git add . && git commit -m "bot) Generated OGP images" && git push origin ogp
